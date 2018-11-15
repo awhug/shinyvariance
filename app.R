@@ -9,8 +9,8 @@ ui <- pageWithSidebar(
   
   # Sidebar panel for inputs ----
   sidebarPanel(
-    sliderInput("samplesInput", "Samples", min = 1, max = 2000, value = 100),
-    sliderInput("nInput", "N per Sample", min = 2, max = 2000, value = 100),
+    sliderInput("samplesInput", "Samples", min = 1, max = 1000, value = 100),
+    sliderInput("nInput", "N per Sample", min = 2, max = 1000, value = 100),
     sliderInput("meanInput", "Mean", min = 0.1, max = 6.9, value = 4.5),
     sliderInput("sdInput", "SD", min = 0.001, max = 5, value = 1.5),
     actionButton("update", "Resample")
@@ -18,7 +18,10 @@ ui <- pageWithSidebar(
   
   # Main panel for displaying outputs ----
   mainPanel(
-    plotOutput("vardata.plot")
+    h4("Cumulative Standard Deviation"),
+    plotOutput("vardata.plot"),
+    br(), br(),
+    tableOutput("vardata.table")
     )
 )
 
@@ -51,21 +54,26 @@ server <- function(input, output) {
     vardata.wide$ID <- rep(1:n)
     reshape(vardata.wide, varying = c(1:Samples), direction = "long", sep = "", timevar = "Sample")
   })
+  
+  opacity <- ifelse(isolate(input$nInput) > 500, ((1010-isolate(input$nInput))/(1010)), 0.5)
 
     output$vardata.plot <- renderPlot(
         #Call the Plot
         ggplot(vardata(), aes(x=ID, y=V, group = factor(Sample))) + 
         
         #Plot Lines -- Higher alpha makes lines less transparent
-        geom_line(alpha = .1, color = "dodgerblue4") + 
+        geom_line(alpha = opacity, color = "dodgerblue4") + 
         
-        #Add Reference Lines
-        geom_hline(yintercept = Simulation.SD) + ylab("SD") + 
-        theme_minimal() + #plot it
+        #Add Labels
+        ylab("SD") + xlab("Sample Size") + theme_minimal() + 
         
         #Set plot limits - Try chaning this to 100, 200, or 500 for closer look
-        xlim(0, input$nInput)
+        xlim(0, isolate(input$nInput))
     )
+    
+    output$vardata.table <- renderTable({
+      head(vardata()[,-4])
+    })
 }
 
 shinyApp(ui, server)
