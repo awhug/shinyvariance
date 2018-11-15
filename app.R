@@ -5,12 +5,16 @@ library(shiny)
 ui <- pageWithSidebar(
   
   # App title ----
-  headerPanel("Simulating Cumulative Variance"),
+  headerPanel("Simulating Cumulative Mean and Variance for a Likert Scale"),
   
   # Sidebar panel for inputs ----
   sidebarPanel(
-    sliderInput("samplesInput", "Samples", min = 1, max = 1000, value = 100),
+    selectInput("typeInput", "Statistic", choices = c("Mean", "SD"), selected = "SD"),
+    helpText("Descriptive statistic (Mean or SD) is calculated cumaltively with each additional observation."),
+    h4("Sample Details"),
+    sliderInput("samplesInput", "Samples", min = 1, max = 100, value = 1),
     sliderInput("nInput", "N per Sample", min = 2, max = 1000, value = 100),
+    h4("True Population Parameters"),
     sliderInput("meanInput", "Mean", min = 0.1, max = 6.9, value = 4.5),
     sliderInput("sdInput", "SD", min = 0.001, max = 5, value = 1.5),
     actionButton("update", "Resample")
@@ -18,10 +22,7 @@ ui <- pageWithSidebar(
   
   # Main panel for displaying outputs ----
   mainPanel(
-    h4("Cumulative Standard Deviation"),
-    plotOutput("vardata.plot"),
-    br(), br(),
-    tableOutput("vardata.table")
+    plotOutput("vardata.plot")
     )
 )
 
@@ -33,6 +34,11 @@ server <- function(input, output) {
     j <- seq_along(x) #for sequential observation within a sample ...
     v <- (cumsum(x^2) - cumsum(x)^2/j) / (j-1) #calculate variance (computational formula)
     if (sd) v <- sqrt(v) #and convert to SD
+    v
+  }
+  
+  cumavg <- function(x){
+    v <- cumsum(x) / seq_along(x)
     v
   }
   
@@ -50,30 +56,41 @@ server <- function(input, output) {
       mydata[mydata>7] = 7 #Round values above 7
     }
     
-    vardata.wide <- as.data.frame(apply(mydata,2,cumvar,sd = TRUE)) #Find SD w/ each additional obs down cols 
+    sdvar <- ifelse(input$typeInput == "SD", TRUE, FALSE)
+    fn <- switch(input$typeInput, 
+                   "Mean" = "cumavg",
+                   "SD" = "cumvar",
+                   "Variance" = "cumvar")
+    ifelse(fn == "cumavg", 
+           fnselect <- list(X = mydata, MARGIN = 2, FUN = fn),
+           fnselect <- list(X = mydata, MARGIN = 2, FUN = fn, sd = sdvar))
+    
+    vardata.wide <- as.data.frame(do.call(apply,fnselect)) #Find SD w/ each additional obs down cols 
+    #vardata.wide <- as.data.frame(apply(mydata,2,fnselect)) #Find SD w/ each additional obs down cols 
     vardata.wide$ID <- rep(1:n)
     reshape(vardata.wide, varying = c(1:Samples), direction = "long", sep = "", timevar = "Sample")
   })
   
-  opacity <- ifelse(isolate(input$nInput) > 500, ((1010-isolate(input$nInput))/(1010)), 0.5)
+  opacity <- ifelse((isolate(input$nInput)+isolate(input$samplesInput)) > 500, ((1010-isolate(input$nInput))/(1010)), 0.5)
 
     output$vardata.plot <- renderPlot(
         #Call the Plot
         ggplot(vardata(), aes(x=ID, y=V, group = factor(Sample))) + 
         
         #Plot Lines -- Higher alpha makes lines less transparent
-        geom_line(alpha = opacity, color = "dodgerblue4") + 
+        geom_line(alpha = opacity/1.5, color = "dodgerblue4") + 
         
         #Add Labels
-        ylab("SD") + xlab("Sample Size") + theme_minimal() + 
+        ylab(ifelse(isolate(input$typeInput) == "Mean", "Mean", "Standard Deviation")) + 
+          xlab("Sample Size") + theme_minimal() + 
         
         #Set plot limits - Try chaning this to 100, 200, or 500 for closer look
-        xlim(0, isolate(input$nInput))
+        xlim(0, isolate(input$nInput)) +
+          ylim(0, ifelse(isolate(input$typeInput) == "Mean",
+                         isolate(input$meanInput)*2,
+                         isolate(input$sdInput)*2))
     )
     
-    output$vardata.table <- renderTable({
-      head(vardata()[,-4])
-    })
 }
 
 shinyApp(ui, server)
