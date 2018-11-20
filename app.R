@@ -15,14 +15,17 @@ ui <- pageWithSidebar(
     sliderInput("samplesInput", "Samples", min = 1, max = 100, value = 1),
     sliderInput("nInput", "N per Sample", min = 2, max = 1000, value = 100),
     h4("True Population Parameters"),
-    sliderInput("meanInput", "Mean", min = 0.1, max = 6.9, value = 4.5),
+    sliderInput("meanInput", "Mean", min = 1, max = 7, value = 4.5),
     sliderInput("sdInput", "SD", min = 0.001, max = 5, value = 1.5),
+    #checkboxInput("data", "Add Data Table", value = FALSE),
     actionButton("update", "Resample")
   ),
   
   # Main panel for displaying outputs ----
   mainPanel(
-    plotOutput("vardata.plot")
+    plotOutput("vardata.plot"),
+    conditionalPanel("data = TRUE",
+                     tableOutput("data"))
     )
 )
 
@@ -66,8 +69,6 @@ server <- function(input, output) {
            fnselect <- list(X = mydata, MARGIN = 2, FUN = fn, sd = sdvar))
     
     vardata.wide <- as.data.frame(do.call(apply,fnselect)) #Find SD w/ each additional obs down cols 
-    #vardata.wide <- as.data.frame(apply(mydata,2,fnselect)) #Find SD w/ each additional obs down cols 
-    vardata.wide$ID <- rep(1:n)
     reshape(vardata.wide, varying = c(1:Samples), direction = "long", sep = "", timevar = "Sample")
   })
   
@@ -75,7 +76,7 @@ server <- function(input, output) {
 
     output$vardata.plot <- renderPlot(
         #Call the Plot
-        ggplot(vardata(), aes(x=ID, y=V, group = factor(Sample))) + 
+        ggplot(vardata(), aes(x=id, y=V, group = factor(Sample))) + 
         
         #Plot Lines -- Higher alpha makes lines less transparent
         geom_line(alpha = opacity/1.5, color = "dodgerblue4") + 
@@ -90,6 +91,11 @@ server <- function(input, output) {
                          isolate(input$meanInput)*2,
                          isolate(input$sdInput)*2))
     )
+    
+    #output$data <- eventReactive(input$update {
+    #  var.table <- reshape(vardata, idvar = "id", timevar = "V", direction = "wide")
+    #  renderTable(var.table)
+    #})
     
 }
 
